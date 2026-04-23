@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPT-image-2 Dimension Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <button id="sidebarExpand" class="sidebar-expand" aria-label="Show sidebar">›</button>
+    <div class="layout-grid">
+      <aside class="controls-panel">
+        <section class="panel-section hero-section">
+          <select id="modelSelect" class="model-select">
+            <option value="gpt-image-2">gpt-image-2</option>
+          </select>
+          <div class="hero-metrics">
+            <div class="hero-size">
+              <span id="heroWidth">1024</span>
+              <span class="hero-divider">x</span>
+              <span id="heroHeight">1024</span>
+              <button id="copyDimensions" class="copy-btn" type="button" aria-label="Copy dimensions">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <div id="heroPixels" class="hero-pixels">1,048,576 pixels</div>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Orientation</h2>
+          </div>
+          <div id="orientationGroup" class="toggle-group" role="group" aria-label="Orientation">
+            <button type="button" class="toggle-button" data-orientation="portrait">Portrait</button>
+            <button type="button" class="toggle-button active" data-orientation="landscape">Landscape</button>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <h2>Size controls</h2>
+          </div>
+
+          <div id="ratioControl" class="ratio-control hidden">
+            <div class="control-head">
+              <label for="ratioScale">Preset scale</label>
+              <span id="ratioScaleLabel">Scale 1</span>
+            </div>
+            <input id="ratioScale" type="range" min="1" max="1" step="1" value="1">
+            <div class="range-labels">
+              <span id="ratioScaleMin">Min</span>
+              <span id="ratioScaleMax">Max</span>
+            </div>
+          </div>
+
+          <div id="dimensionControls" class="input-grid">
+            <div class="input-card">
+              <div class="control-head">
+                <label for="widthInput">Width</label>
+                <span>step 16</span>
+              </div>
+              <input id="widthInput" type="number" min="16" max="3840" step="16" inputmode="numeric">
+              <input id="widthSlider" type="range" min="16" max="3840" step="16">
+            </div>
+
+            <div class="input-card">
+              <div class="control-head">
+                <label for="heightInput">Height</label>
+                <span>step 16</span>
+              </div>
+              <input id="heightInput" type="number" min="16" max="3840" step="16" inputmode="numeric">
+              <input id="heightSlider" type="range" min="16" max="3840" step="16">
+            </div>
+          </div>
+        </section>
+
+        <section id="presetsSection" class="panel-section">
+          <div class="section-heading">
+            <h2>Presets</h2>
+          </div>
+          <div id="presetGroups" class="preset-groups"></div>
+        </section>
+
+
+      </aside>
+      <button id="sidebarCollapse" class="sidebar-collapse" aria-label="Hide sidebar">‹</button>
+
+      <main class="preview-panel">
+          <div id="previewStage" class="preview-stage" aria-label="Dimension preview area">
+            <div class="crosshair crosshair-x"></div>
+            <div class="crosshair crosshair-y"></div>
+
+            <div id="previewShape" class="preview-shape" aria-live="polite">
+              <div id="scaleBadge" class="shape-scale-badge hidden">2:1 SCALE</div>
+              <div class="shape-sheen"></div>
+              <div id="widthLabel" class="dimension-label horizontal">1024 px</div>
+              <div id="heightLabel" class="dimension-label vertical">1024 px</div>
+
+              <button type="button" class="resize-handle handle-nw" data-handle="nw" aria-label="Resize from top left"></button>
+              <button type="button" class="resize-handle handle-n" data-handle="n" aria-label="Resize from top edge"></button>
+              <button type="button" class="resize-handle handle-ne" data-handle="ne" aria-label="Resize from top right"></button>
+              <button type="button" class="resize-handle handle-e" data-handle="e" aria-label="Resize from right edge"></button>
+              <button type="button" class="resize-handle handle-se" data-handle="se" aria-label="Resize from bottom right"></button>
+              <button type="button" class="resize-handle handle-s" data-handle="s" aria-label="Resize from bottom edge"></button>
+              <button type="button" class="resize-handle handle-sw" data-handle="sw" aria-label="Resize from bottom left"></button>
+              <button type="button" class="resize-handle handle-w" data-handle="w" aria-label="Resize from left edge"></button>
+            </div>
+          </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
