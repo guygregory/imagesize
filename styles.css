@@ -930,7 +930,19 @@ body.sidebar-collapsed .sidebar-collapse {
   }
 }
 
+.mobile-footnote {
+  display: none;
+}
+
 @media (max-width: 760px) {
+  .mobile-footnote {
+    display: block;
+    margin: 12px 0 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+}
   html,
   body {
     height: 100%;
