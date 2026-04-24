@@ -360,6 +360,7 @@
       syncPresetDimensions();
       render();
     });
+    refs.ratioScale.addEventListener("wheel", onRatioScaleWheel, { passive: false });
 
     bindDimensionInput(refs.widthInput, "width", false);
     bindDimensionInput(refs.heightInput, "height", false);
@@ -501,6 +502,37 @@
     const dims = computePresetDimensions(preset, state.presetScale, state.orientation);
     state.width = dims.width;
     state.height = dims.height;
+  }
+
+  function adjustPresetScale(delta) {
+    const preset = getActivePreset();
+    if (!preset || preset.freeform || !delta) {
+      return false;
+    }
+
+    const nextScale = clamp(state.presetScale + delta, preset.range.min, preset.range.max);
+    if (nextScale === state.presetScale) {
+      return false;
+    }
+
+    state.presetScale = nextScale;
+    syncPresetDimensions();
+    render();
+    return true;
+  }
+
+  function onRatioScaleWheel(event) {
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      return;
+    }
+
+    const delta = event.deltaY < 0 ? -1 : event.deltaY > 0 ? 1 : 0;
+    if (!delta) {
+      return;
+    }
+
+    event.preventDefault();
+    adjustPresetScale(delta);
   }
 
   function computePresetDimensions(preset, scale, orientation) {
@@ -760,13 +792,11 @@
       state.width = next.width;
       state.height = next.height;
       state.orientation = state.width >= state.height ? "landscape" : "portrait";
+      render();
     } else {
       const direction = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1;
-      state.presetScale = clamp(state.presetScale + direction, preset.range.min, preset.range.max);
-      syncPresetDimensions();
+      adjustPresetScale(direction);
     }
-
-    render();
   }
 
   function render() {
