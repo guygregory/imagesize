@@ -931,12 +931,26 @@ body.sidebar-collapsed .sidebar-collapse {
 }
 
 @media (max-width: 760px) {
+  html,
+  body {
+    height: 100%;
+  }
+
   .app-shell {
+    box-sizing: border-box;
+    min-height: 100dvh;
+    height: 100dvh;
     padding: 16px;
+    overflow: hidden;
   }
 
   .preview-stage {
     min-height: 420px;
+  }
+
+  .preview-shape,
+  .resize-handle {
+    touch-action: none;
   }
 
   .stats-grid,
