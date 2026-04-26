@@ -13,6 +13,24 @@
       },
     },
     {
+      id: "gpt-image-1-1-5",
+      label: "gpt-image-1/1.5",
+      defaultPresetId: "gpt-image-1-1-5-square",
+      fixedSizes: [
+        { presetId: "gpt-image-1-1-5-square", width: 1024, height: 1024 },
+        { presetId: "gpt-image-1-1-5-portrait", width: 1024, height: 1536 },
+        { presetId: "gpt-image-1-1-5-landscape", width: 1536, height: 1024 },
+      ],
+      constraints: {
+        step: 512,
+        minEdge: 1024,
+        maxEdge: 1536,
+        minPixels: 1024 * 1024,
+        maxPixels: 1024 * 1536,
+        maxAspect: 1.5,
+      },
+    },
+    {
       id: "mai-image-2-2e",
       label: "MAI-Image-2/2e",
       constraints: {
@@ -31,6 +49,7 @@
 
   const CATEGORY_ORDER = [
     "Custom",
+    "Supported sizes",
     "Standard ratios",
     "Paper and print",
     "Displays",
@@ -50,6 +69,42 @@
       summary: "Custom",
       target: "Custom dimensions",
       note: "Unlocked width and height. Every edit snaps to the nearest valid size.",
+    },
+    {
+      id: "gpt-image-1-1-5-square",
+      category: "Supported sizes",
+      label: "Square",
+      fixedSize: true,
+      supportedModels: ["gpt-image-1-1-5"],
+      width: 1024,
+      height: 1024,
+      summary: "1024x1024",
+      target: "1024 x 1024",
+      note: "Supported square size for gpt-image-1/1.5.",
+    },
+    {
+      id: "gpt-image-1-1-5-portrait",
+      category: "Supported sizes",
+      label: "Portrait",
+      fixedSize: true,
+      supportedModels: ["gpt-image-1-1-5"],
+      width: 1024,
+      height: 1536,
+      summary: "1024x1536",
+      target: "1024 x 1536",
+      note: "Supported portrait size for gpt-image-1/1.5.",
+    },
+    {
+      id: "gpt-image-1-1-5-landscape",
+      category: "Supported sizes",
+      label: "Landscape",
+      fixedSize: true,
+      supportedModels: ["gpt-image-1-1-5"],
+      width: 1536,
+      height: 1024,
+      summary: "1536x1024",
+      target: "1536 x 1024",
+      note: "Supported landscape size for gpt-image-1/1.5.",
     },
     {
       id: "square",
@@ -333,7 +388,7 @@
   }
 
   function normalizePreset(definition) {
-    if (definition.freeform) {
+    if (definition.freeform || definition.fixedSize) {
       return Object.assign({}, definition, {
         range: null,
       });
@@ -367,7 +422,7 @@
   }
 
   function getPresetRange(preset) {
-    if (!preset || preset.freeform) {
+    if (!preset || preset.freeform || preset.fixedSize) {
       return null;
     }
 
@@ -375,11 +430,28 @@
   }
 
   function isPresetSupported(preset) {
-    return Boolean(preset && (preset.freeform || getPresetRange(preset)));
+    if (!preset) {
+      return false;
+    }
+
+    const model = getActiveModel();
+    if (model.fixedSizes) {
+      return Boolean(preset.fixedSize && preset.supportedModels && preset.supportedModels.indexOf(model.id) >= 0);
+    }
+
+    if (preset.fixedSize) {
+      return false;
+    }
+
+    return Boolean(preset.freeform || getPresetRange(preset));
+  }
+
+  function getActiveModel() {
+    return MODEL_MAP.get(state.modelId);
   }
 
   function getConstraints() {
-    return MODEL_MAP.get(state.modelId).constraints;
+    return getActiveModel().constraints;
   }
 
   function getWidthValues(constraints) {
@@ -538,6 +610,11 @@
       }
       state.presetScale = null;
       state.orientation = state.width >= state.height ? "landscape" : "portrait";
+    } else if (preset.fixedSize) {
+      state.width = preset.width;
+      state.height = preset.height;
+      state.presetScale = null;
+      state.orientation = state.width >= state.height ? "landscape" : "portrait";
     } else {
       const range = getPresetRange(preset);
       state.orientation = preset.defaultOrientation;
@@ -558,11 +635,16 @@
 
     let preset = getActivePreset();
     if (!isPresetSupported(preset)) {
-      state.presetId = FREEFORM_ID;
+      state.presetId = getDefaultPresetIdForModel();
       preset = getActivePreset();
     }
 
-    if (preset && preset.freeform) {
+    if (preset && preset.fixedSize) {
+      state.width = preset.width;
+      state.height = preset.height;
+      state.presetScale = null;
+      state.orientation = state.width >= state.height ? "landscape" : "portrait";
+    } else if (preset && preset.freeform) {
       const next = findNearestValidDimensions(state.width, state.height, null);
       state.width = next.width;
       state.height = next.height;
@@ -577,6 +659,11 @@
     render();
   }
 
+  function getDefaultPresetIdForModel() {
+    const model = getActiveModel();
+    return model.defaultPresetId || FREEFORM_ID;
+  }
+
   function setOrientation(orientation) {
     if (orientation !== "portrait" && orientation !== "landscape") {
       return;
@@ -584,6 +671,12 @@
 
     state.orientation = orientation;
     const preset = getActivePreset();
+    if (preset && preset.fixedSize) {
+      const next = findNearestFixedSize(state.height, state.width, null);
+      selectPreset(next.presetId, { keepFreeformDimensions: false });
+      return;
+    }
+
     if (preset && preset.freeform) {
       const swapped = findNearestValidDimensions(state.height, state.width, null);
       state.width = swapped.width;
@@ -610,6 +703,13 @@
       return;
     }
 
+    if (preset.fixedSize) {
+      state.width = preset.width;
+      state.height = preset.height;
+      state.orientation = state.width >= state.height ? "landscape" : "portrait";
+      return;
+    }
+
     const dims = computePresetDimensions(preset, state.presetScale, state.orientation);
     state.width = dims.width;
     state.height = dims.height;
@@ -617,7 +717,7 @@
 
   function adjustPresetScale(delta) {
     const preset = getActivePreset();
-    if (!preset || preset.freeform || !delta) {
+    if (!preset || preset.freeform || preset.fixedSize || !delta) {
       return false;
     }
 
@@ -649,7 +749,7 @@
 
   function shouldHandleScaleWheel() {
     const preset = getActivePreset();
-    if (!preset || preset.freeform) {
+    if (!preset || preset.freeform || preset.fixedSize) {
       return false;
     }
 
@@ -708,6 +808,12 @@
       state.height = next.height;
       state.orientation = state.width >= state.height ? "landscape" : "portrait";
       render();
+      return;
+    }
+
+    if (preset.fixedSize) {
+      const next = findNearestFixedSize(axis === "width" ? rawValue : state.width, axis === "height" ? rawValue : state.height, axis);
+      selectPreset(next.presetId, { keepFreeformDimensions: false });
       return;
     }
 
@@ -803,6 +909,18 @@
       const next = findNearestValidDimensions(target.width, target.height, getHandlePreference(state.drag.handle));
       state.width = next.width;
       state.height = next.height;
+      state.orientation = state.width >= state.height ? "landscape" : "portrait";
+      render();
+      return;
+    }
+
+    if (preset.fixedSize) {
+      const target = getDraggedFreeformSize(state.drag.handle, state.drag.startWidth, state.drag.startHeight, deltaImageX, deltaImageY);
+      const next = findNearestFixedSize(target.width, target.height, getHandlePreference(state.drag.handle));
+      state.presetId = next.presetId;
+      state.width = next.width;
+      state.height = next.height;
+      state.presetScale = null;
       state.orientation = state.width >= state.height ? "landscape" : "portrait";
       render();
       return;
@@ -935,6 +1053,11 @@
       state.height = next.height;
       state.orientation = state.width >= state.height ? "landscape" : "portrait";
       render();
+    } else if (preset.fixedSize) {
+      const next = getAdjacentFixedSize(event.key);
+      if (next) {
+        selectPreset(next.presetId, { keepFreeformDimensions: false });
+      }
     } else {
       const direction = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1;
       adjustPresetScale(direction);
@@ -950,6 +1073,8 @@
   }
 
   function updatePresetButtons() {
+    refs.presetGroups.classList.toggle("fixed-size-model", Boolean(getActiveModel().fixedSizes));
+
     refs.presetGroups.querySelectorAll("[data-preset-id]").forEach(function (button) {
       const preset = PRESET_MAP.get(button.dataset.presetId);
       const supported = isPresetSupported(preset);
@@ -1002,6 +1127,14 @@
       refs.heightInput.disabled = false;
       refs.widthSlider.disabled = false;
       refs.heightSlider.disabled = false;
+
+    } else if (preset && preset.fixedSize) {
+      refs.ratioControl.classList.add("hidden");
+      refs.dimensionControls.classList.add("hidden");
+      refs.widthInput.disabled = true;
+      refs.heightInput.disabled = true;
+      refs.widthSlider.disabled = true;
+      refs.heightSlider.disabled = true;
 
     } else if (preset) {
       const range = getPresetRange(preset);
@@ -1117,6 +1250,10 @@
   }
 
   function findNearestValidDimensions(targetWidth, targetHeight, preference) {
+    if (getActiveModel().fixedSizes) {
+      return findNearestFixedSize(targetWidth, targetHeight, preference);
+    }
+
     const constraints = getConstraints();
     const desiredWidth = clamp(roundToStep(targetWidth), constraints.minEdge, constraints.maxEdge);
     const desiredHeight = clamp(roundToStep(targetHeight), constraints.minEdge, constraints.maxEdge);
@@ -1144,6 +1281,36 @@
       width: clamp(roundToStep(1024), constraints.minEdge, constraints.maxEdge),
       height: clamp(roundToStep(1024), constraints.minEdge, constraints.maxEdge),
     };
+  }
+
+  function findNearestFixedSize(targetWidth, targetHeight, preference) {
+    const model = getActiveModel();
+    const sizes = model.fixedSizes || [];
+    let best = null;
+
+    sizes.forEach(function (size) {
+      const score = scoreCandidate(size.width, size.height, targetWidth, targetHeight, preference);
+      if (!best || score < best.score) {
+        best = Object.assign({ score: score }, size);
+      }
+    });
+
+    return best || { presetId: getDefaultPresetIdForModel(), width: 1024, height: 1024 };
+  }
+
+  function getAdjacentFixedSize(key) {
+    const model = getActiveModel();
+    const sizes = model.fixedSizes || [];
+    const currentIndex = sizes.findIndex(function (size) {
+      return size.presetId === state.presetId;
+    });
+
+    if (currentIndex < 0) {
+      return null;
+    }
+
+    const direction = key === "ArrowLeft" || key === "ArrowDown" ? -1 : 1;
+    return sizes[clamp(currentIndex + direction, 0, sizes.length - 1)];
   }
 
   function getValidHeightRangeForWidth(width) {

@@ -299,6 +299,28 @@ input {
   gap: 4px;
 }
 
+.preset-groups.fixed-size-model .preset-buttons {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: auto;
+  grid-template-columns: 1fr;
+}
+
+.preset-groups.fixed-size-model,
+.preset-groups.fixed-size-model .preset-group {
+  align-content: start;
+  align-items: stretch;
+}
+
+.preset-groups.fixed-size-model .preset-button {
+  display: flex;
+  min-height: 54px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 3px;
+}
+
 .preset-button,
 .toggle-button {
   appearance: none;
@@ -342,6 +364,13 @@ input {
 
 .preset-meta {
   display: none;
+}
+
+.preset-groups.fixed-size-model .preset-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.25;
 }
 
 .toggle-group {
