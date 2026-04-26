@@ -31,6 +31,19 @@
       },
     },
     {
+      id: "flux-2",
+      label: "FLUX.2",
+      requireDefaultScaleInRange: true,
+      constraints: {
+        step: 16,
+        minEdge: 64,
+        maxEdge: 4096,
+        minPixels: 64 * 64,
+        maxPixels: 4 * 1024 * 1024,
+        maxAspect: 3,
+      },
+    },
+    {
       id: "mai-image-2-2e",
       label: "MAI-Image-2/2e",
       constraints: {
@@ -443,7 +456,20 @@
       return false;
     }
 
-    return Boolean(preset.freeform || getPresetRange(preset));
+    if (preset.freeform) {
+      return true;
+    }
+
+    const range = getPresetRange(preset);
+    if (!range) {
+      return false;
+    }
+
+    if (model.requireDefaultScaleInRange && (preset.defaultScale < range.min || preset.defaultScale > range.max)) {
+      return false;
+    }
+
+    return true;
   }
 
   function getActiveModel() {
