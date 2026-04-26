@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GPT-image-2 Dimension Explorer</title>
+  <title>Image Dimension Explorer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,6 +17,7 @@
         <section class="panel-section hero-section">
           <select id="modelSelect" class="model-select">
             <option value="gpt-image-2">gpt-image-2</option>
+            <option value="mai-image-2-2e">MAI-Image-2/2e</option>
           </select>
           <div class="hero-metrics">
             <div class="hero-size">
@@ -62,7 +63,7 @@
             <div class="input-card">
               <div class="control-head">
                 <label for="widthInput">Width</label>
-                <span>step 16</span>
+                <span id="widthStepLabel">step 16</span>
               </div>
               <input id="widthInput" type="number" min="16" max="3840" step="16" inputmode="numeric">
               <input id="widthSlider" type="range" min="16" max="3840" step="16">
@@ -71,7 +72,7 @@
             <div class="input-card">
               <div class="control-head">
                 <label for="heightInput">Height</label>
-                <span>step 16</span>
+                <span id="heightStepLabel">step 16</span>
               </div>
               <input id="heightInput" type="number" min="16" max="3840" step="16" inputmode="numeric">
               <input id="heightSlider" type="range" min="16" max="3840" step="16">

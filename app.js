@@ -1,11 +1,33 @@
 (function () {
-  const CONSTRAINTS = {
-    step: 16,
-    maxEdge: 3840,
-    minPixels: 655360,
-    maxPixels: 8294400,
-    maxAspect: 3,
-  };
+  const MODEL_DEFINITIONS = [
+    {
+      id: "gpt-image-2",
+      label: "gpt-image-2",
+      constraints: {
+        step: 16,
+        minEdge: 16,
+        maxEdge: 3840,
+        minPixels: 655360,
+        maxPixels: 8294400,
+        maxAspect: 3,
+      },
+    },
+    {
+      id: "mai-image-2-2e",
+      label: "MAI-Image-2/2e",
+      constraints: {
+        step: 1,
+        minEdge: 768,
+        maxEdge: 1365,
+        minPixels: 768 * 768,
+        maxPixels: 1048576,
+        maxAspect: 1048576 / (768 * 768),
+      },
+    },
+  ];
+
+  const MODEL_MAP = new Map(MODEL_DEFINITIONS.map(function (model) { return [model.id, model]; }));
+  const DEFAULT_MODEL_ID = "gpt-image-2";
 
   const CATEGORY_ORDER = [
     "Custom",
@@ -254,26 +276,28 @@
   const PRESETS = PRESET_DEFINITIONS.map(normalizePreset);
   const PRESET_MAP = new Map(PRESETS.map((preset) => [preset.id, preset]));
   const FREEFORM_ID = "freeform";
-  const WIDTH_VALUES = Array.from({ length: CONSTRAINTS.maxEdge / CONSTRAINTS.step }, function (_, index) {
-    return (index + 1) * CONSTRAINTS.step;
-  });
 
   const state = {
+    modelId: DEFAULT_MODEL_ID,
     presetId: FREEFORM_ID,
     orientation: "landscape",
     width: 1024,
     height: 1024,
     presetScale: null,
     previewScale: 1,
+    scaleWheelActive: false,
     drag: null,
     lastPointerStartAt: 0,
   };
 
   const refs = {
+    modelSelect: document.getElementById("modelSelect"),
     presetGroups: document.getElementById("presetGroups"),
     orientationGroup: document.getElementById("orientationGroup"),
     widthInput: document.getElementById("widthInput"),
     heightInput: document.getElementById("heightInput"),
+    widthStepLabel: document.getElementById("widthStepLabel"),
+    heightStepLabel: document.getElementById("heightStepLabel"),
     widthSlider: document.getElementById("widthSlider"),
     heightSlider: document.getElementById("heightSlider"),
     dimensionControls: document.getElementById("dimensionControls"),
@@ -300,6 +324,7 @@
   initialize();
 
   function initialize() {
+    renderModelOptions();
     renderPresetGroups();
     bindEvents();
     selectPreset(FREEFORM_ID, { keepFreeformDimensions: false });
@@ -314,30 +339,81 @@
       });
     }
 
-    const range = getScaleRange(definition.ratioBlocks[0], definition.ratioBlocks[1]);
-    const defaultScale = clamp(definition.defaultScale, range.min, range.max);
-
     return Object.assign({}, definition, {
-      range: range,
-      defaultScale: defaultScale,
+      range: null,
     });
   }
 
-  function getScaleRange(blockWidth, blockHeight) {
-    const areaPerScale = CONSTRAINTS.step * CONSTRAINTS.step * blockWidth * blockHeight;
-    const minScale = Math.max(1, Math.ceil(Math.sqrt(CONSTRAINTS.minPixels / areaPerScale)));
-    const maxScaleByPixels = Math.floor(Math.sqrt(CONSTRAINTS.maxPixels / areaPerScale));
-    const maxScaleByEdge = Math.floor(CONSTRAINTS.maxEdge / (CONSTRAINTS.step * Math.max(blockWidth, blockHeight)));
+  function getScaleRange(blockWidth, blockHeight, constraints) {
+    const areaPerScale = constraints.step * constraints.step * blockWidth * blockHeight;
+    const minScale = Math.max(
+      1,
+      Math.ceil(Math.sqrt(constraints.minPixels / areaPerScale)),
+      Math.ceil(constraints.minEdge / (constraints.step * blockWidth)),
+      Math.ceil(constraints.minEdge / (constraints.step * blockHeight))
+    );
+    const maxScaleByPixels = Math.floor(Math.sqrt(constraints.maxPixels / areaPerScale));
+    const maxScaleByEdge = Math.floor(constraints.maxEdge / (constraints.step * Math.max(blockWidth, blockHeight)));
+    const maxScale = Math.min(maxScaleByPixels, maxScaleByEdge);
+
+    if (maxScale < minScale) {
+      return null;
+    }
+
     return {
       min: minScale,
-      max: Math.max(minScale, Math.min(maxScaleByPixels, maxScaleByEdge)),
+      max: maxScale,
     };
   }
 
+  function getPresetRange(preset) {
+    if (!preset || preset.freeform) {
+      return null;
+    }
+
+    return getScaleRange(preset.ratioBlocks[0], preset.ratioBlocks[1], getConstraints());
+  }
+
+  function isPresetSupported(preset) {
+    return Boolean(preset && (preset.freeform || getPresetRange(preset)));
+  }
+
+  function getConstraints() {
+    return MODEL_MAP.get(state.modelId).constraints;
+  }
+
+  function getWidthValues(constraints) {
+    const count = Math.floor((constraints.maxEdge - constraints.minEdge) / constraints.step) + 1;
+    return Array.from({ length: count }, function (_, index) {
+      return constraints.minEdge + index * constraints.step;
+    });
+  }
+
+  function renderModelOptions() {
+    const fragment = document.createDocumentFragment();
+
+    MODEL_DEFINITIONS.forEach(function (model) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.label;
+      fragment.appendChild(option);
+    });
+
+    refs.modelSelect.replaceChildren(fragment);
+    refs.modelSelect.value = state.modelId;
+  }
+
   function bindEvents() {
+    refs.modelSelect.addEventListener("change", function () {
+      setModel(refs.modelSelect.value);
+    });
+
     refs.presetGroups.addEventListener("click", function (event) {
       const button = event.target.closest("button[data-preset-id]");
       if (!button) {
+        return;
+      }
+      if (button.disabled) {
         return;
       }
       selectPreset(button.dataset.presetId, { keepFreeformDimensions: true });
@@ -356,11 +432,14 @@
       if (!preset || preset.freeform) {
         return;
       }
-      state.presetScale = clamp(Number(refs.ratioScale.value), preset.range.min, preset.range.max);
+      const range = getPresetRange(preset);
+      state.presetScale = clamp(Number(refs.ratioScale.value), range.min, range.max);
       syncPresetDimensions();
       render();
     });
-    refs.ratioScale.addEventListener("wheel", onRatioScaleWheel, { passive: false });
+    refs.ratioScale.addEventListener("pointerdown", activateScaleWheelControl);
+    refs.ratioScale.addEventListener("focus", activateScaleWheelControl);
+    refs.ratioScale.addEventListener("blur", deactivateScaleWheelControl);
 
     bindDimensionInput(refs.widthInput, "width", false);
     bindDimensionInput(refs.heightInput, "height", false);
@@ -373,6 +452,8 @@
     });
 
     window.addEventListener("keydown", onKeydown);
+    window.addEventListener("wheel", onWindowWheel, { passive: false });
+    document.addEventListener("pointerdown", onDocumentPointerDown, true);
   }
 
   function bindDimensionInput(element, axis, immediate) {
@@ -436,7 +517,7 @@
 
   function selectPreset(presetId, options) {
     const preset = PRESET_MAP.get(presetId);
-    if (!preset) {
+    if (!preset || !isPresetSupported(preset)) {
       return;
     }
 
@@ -458,8 +539,38 @@
       state.presetScale = null;
       state.orientation = state.width >= state.height ? "landscape" : "portrait";
     } else {
+      const range = getPresetRange(preset);
       state.orientation = preset.defaultOrientation;
-      state.presetScale = preset.defaultScale;
+      state.presetScale = clamp(preset.defaultScale, range.min, range.max);
+      syncPresetDimensions();
+    }
+
+    render();
+  }
+
+  function setModel(modelId) {
+    if (!MODEL_MAP.has(modelId)) {
+      return;
+    }
+
+    state.modelId = modelId;
+    state.drag = null;
+
+    let preset = getActivePreset();
+    if (!isPresetSupported(preset)) {
+      state.presetId = FREEFORM_ID;
+      preset = getActivePreset();
+    }
+
+    if (preset && preset.freeform) {
+      const next = findNearestValidDimensions(state.width, state.height, null);
+      state.width = next.width;
+      state.height = next.height;
+      state.presetScale = null;
+      state.orientation = state.width >= state.height ? "landscape" : "portrait";
+    } else if (preset) {
+      const range = getPresetRange(preset);
+      state.presetScale = clamp(state.presetScale || preset.defaultScale, range.min, range.max);
       syncPresetDimensions();
     }
 
@@ -510,7 +621,8 @@
       return false;
     }
 
-    const nextScale = clamp(state.presetScale + delta, preset.range.min, preset.range.max);
+    const range = getPresetRange(preset);
+    const nextScale = clamp(state.presetScale + delta, range.min, range.max);
     if (nextScale === state.presetScale) {
       return false;
     }
@@ -521,8 +633,31 @@
     return true;
   }
 
-  function onRatioScaleWheel(event) {
-    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  function activateScaleWheelControl() {
+    state.scaleWheelActive = true;
+  }
+
+  function deactivateScaleWheelControl() {
+    state.scaleWheelActive = false;
+  }
+
+  function onDocumentPointerDown(event) {
+    if (event.target !== refs.ratioScale) {
+      deactivateScaleWheelControl();
+    }
+  }
+
+  function shouldHandleScaleWheel() {
+    const preset = getActivePreset();
+    if (!preset || preset.freeform) {
+      return false;
+    }
+
+    return document.activeElement === refs.ratioScale || state.scaleWheelActive;
+  }
+
+  function onWindowWheel(event) {
+    if (!shouldHandleScaleWheel()) {
       return;
     }
 
@@ -536,8 +671,9 @@
   }
 
   function computePresetDimensions(preset, scale, orientation) {
-    const blockWidth = preset.ratioBlocks[0] * CONSTRAINTS.step * scale;
-    const blockHeight = preset.ratioBlocks[1] * CONSTRAINTS.step * scale;
+    const constraints = getConstraints();
+    const blockWidth = preset.ratioBlocks[0] * constraints.step * scale;
+    const blockHeight = preset.ratioBlocks[1] * constraints.step * scale;
     let width = blockWidth;
     let height = blockHeight;
 
@@ -576,8 +712,10 @@
     }
 
     const orientedBlocks = getOrientedBlocks(preset, state.orientation);
-    const perScale = axis === "width" ? orientedBlocks.width * CONSTRAINTS.step : orientedBlocks.height * CONSTRAINTS.step;
-    const nextScale = clamp(Math.round(rawValue / perScale), preset.range.min, preset.range.max);
+    const constraints = getConstraints();
+    const range = getPresetRange(preset);
+    const perScale = axis === "width" ? orientedBlocks.width * constraints.step : orientedBlocks.height * constraints.step;
+    const nextScale = clamp(Math.round(rawValue / perScale), range.min, range.max);
     state.presetScale = nextScale;
     syncPresetDimensions();
     render();
@@ -671,10 +809,12 @@
     }
 
     const orientedBlocks = getOrientedBlocks(preset, state.drag.orientation);
-    const widthStep = orientedBlocks.width * CONSTRAINTS.step;
-    const heightStep = orientedBlocks.height * CONSTRAINTS.step;
+    const constraints = getConstraints();
+    const range = getPresetRange(preset);
+    const widthStep = orientedBlocks.width * constraints.step;
+    const heightStep = orientedBlocks.height * constraints.step;
     const scaleDelta = getScaleDeltaFromDrag(state.drag.handle, deltaImageX, deltaImageY, widthStep, heightStep);
-    state.presetScale = clamp(state.drag.startScale + scaleDelta, preset.range.min, preset.range.max);
+    state.presetScale = clamp(state.drag.startScale + scaleDelta, range.min, range.max);
     syncPresetDimensions();
     render();
   }
@@ -693,6 +833,7 @@
   }
 
   function getDraggedFreeformSize(handle, startWidth, startHeight, deltaImageX, deltaImageY) {
+    const constraints = getConstraints();
     let width = startWidth;
     let height = startHeight;
 
@@ -710,8 +851,8 @@
     }
 
     return {
-      width: Math.max(CONSTRAINTS.step, width),
-      height: Math.max(CONSTRAINTS.step, height),
+      width: Math.max(constraints.minEdge, width),
+      height: Math.max(constraints.minEdge, height),
     };
   }
 
@@ -767,24 +908,25 @@
     event.preventDefault();
 
     if (preset.freeform) {
+      const constraints = getConstraints();
       let targetWidth = state.width;
       let targetHeight = state.height;
       let preference = null;
 
       if (event.key === "ArrowLeft") {
-        targetWidth -= CONSTRAINTS.step;
+        targetWidth -= constraints.step;
         preference = "width";
       }
       if (event.key === "ArrowRight") {
-        targetWidth += CONSTRAINTS.step;
+        targetWidth += constraints.step;
         preference = "width";
       }
       if (event.key === "ArrowUp") {
-        targetHeight += CONSTRAINTS.step;
+        targetHeight += constraints.step;
         preference = "height";
       }
       if (event.key === "ArrowDown") {
-        targetHeight -= CONSTRAINTS.step;
+        targetHeight -= constraints.step;
         preference = "height";
       }
 
@@ -809,7 +951,18 @@
 
   function updatePresetButtons() {
     refs.presetGroups.querySelectorAll("[data-preset-id]").forEach(function (button) {
-      button.classList.toggle("active", button.dataset.presetId === state.presetId);
+      const preset = PRESET_MAP.get(button.dataset.presetId);
+      const supported = isPresetSupported(preset);
+      button.disabled = !supported;
+      button.classList.toggle("hidden", !supported);
+      button.classList.toggle("active", supported && button.dataset.presetId === state.presetId);
+    });
+
+    refs.presetGroups.querySelectorAll(".preset-group").forEach(function (group) {
+      const hasVisiblePreset = Array.from(group.querySelectorAll("[data-preset-id]")).some(function (button) {
+        return !button.classList.contains("hidden");
+      });
+      group.classList.toggle("hidden", !hasVisiblePreset);
     });
   }
 
@@ -821,6 +974,22 @@
 
   function updateControls() {
     const preset = getActivePreset();
+    const constraints = getConstraints();
+    refs.modelSelect.value = state.modelId;
+    refs.widthInput.min = constraints.minEdge;
+    refs.heightInput.min = constraints.minEdge;
+    refs.widthSlider.min = constraints.minEdge;
+    refs.heightSlider.min = constraints.minEdge;
+    refs.widthInput.max = constraints.maxEdge;
+    refs.heightInput.max = constraints.maxEdge;
+    refs.widthSlider.max = constraints.maxEdge;
+    refs.heightSlider.max = constraints.maxEdge;
+    refs.widthInput.step = constraints.step;
+    refs.heightInput.step = constraints.step;
+    refs.widthSlider.step = constraints.step;
+    refs.heightSlider.step = constraints.step;
+    refs.widthStepLabel.textContent = constraints.step === 1 ? "integer" : "step " + constraints.step;
+    refs.heightStepLabel.textContent = constraints.step === 1 ? "integer" : "step " + constraints.step;
     refs.widthInput.value = state.width;
     refs.heightInput.value = state.height;
     refs.widthSlider.value = state.width;
@@ -835,14 +1004,15 @@
       refs.heightSlider.disabled = false;
 
     } else if (preset) {
+      const range = getPresetRange(preset);
       refs.ratioControl.classList.remove("hidden");
       refs.dimensionControls.classList.add("hidden");
-      refs.ratioScale.min = preset.range.min;
-      refs.ratioScale.max = preset.range.max;
+      refs.ratioScale.min = range.min;
+      refs.ratioScale.max = range.max;
       refs.ratioScale.value = state.presetScale;
       refs.ratioScaleLabel.textContent = "Scale " + state.presetScale;
-      refs.ratioScaleMin.textContent = "Min " + preset.range.min;
-      refs.ratioScaleMax.textContent = "Max " + preset.range.max;
+      refs.ratioScaleMin.textContent = "Min " + range.min;
+      refs.ratioScaleMax.textContent = "Max " + range.max;
       refs.widthInput.disabled = true;
       refs.heightInput.disabled = true;
       refs.widthSlider.disabled = true;
@@ -889,10 +1059,11 @@
   }
 
   function renderStats() {
+    const constraints = getConstraints();
     const preset = getActivePreset();
     const pixels = state.width * state.height;
     const aspect = getAspectString(state.width, state.height);
-    const usage = ((pixels / CONSTRAINTS.maxPixels) * 100).toFixed(2) + "%";
+    const usage = ((pixels / constraints.maxPixels) * 100).toFixed(2) + "%";
 
     refs.heroWidth.textContent = formatNumber(state.width);
     refs.heroHeight.textContent = formatNumber(state.height);
@@ -901,34 +1072,40 @@
   }
 
   function validateDimensions(width, height) {
+    const constraints = getConstraints();
     const pixels = width * height;
     const longest = Math.max(width, height);
     const shortest = Math.min(width, height);
     const aspect = longest / shortest;
     const items = [
       {
-        label: "Width uses 16 px steps",
-        valid: width % CONSTRAINTS.step === 0,
+        label: constraints.step === 1 ? "Width is an integer" : "Width uses " + constraints.step + " px steps",
+        valid: width % constraints.step === 0,
         detail: formatNumber(width) + " px",
       },
       {
-        label: "Height uses 16 px steps",
-        valid: height % CONSTRAINTS.step === 0,
+        label: constraints.step === 1 ? "Height is an integer" : "Height uses " + constraints.step + " px steps",
+        valid: height % constraints.step === 0,
         detail: formatNumber(height) + " px",
       },
       {
-        label: "Longest edge stays within 3840 px",
-        valid: longest <= CONSTRAINTS.maxEdge,
+        label: "Width and height meet the minimum edge",
+        valid: width >= constraints.minEdge && height >= constraints.minEdge,
+        detail: formatNumber(constraints.minEdge) + " px minimum",
+      },
+      {
+        label: "Longest edge stays within the model range",
+        valid: longest <= constraints.maxEdge,
         detail: formatNumber(longest) + " px",
       },
       {
-        label: "Aspect stays within 3:1",
-        valid: aspect <= CONSTRAINTS.maxAspect,
+        label: "Aspect stays within the model range",
+        valid: aspect <= constraints.maxAspect,
         detail: aspect.toFixed(2) + ":1",
       },
       {
         label: "Pixels stay inside the legal range",
-        valid: pixels >= CONSTRAINTS.minPixels && pixels <= CONSTRAINTS.maxPixels,
+        valid: pixels >= constraints.minPixels && pixels <= constraints.maxPixels,
         detail: formatNumber(pixels) + " px",
       },
     ];
@@ -940,11 +1117,12 @@
   }
 
   function findNearestValidDimensions(targetWidth, targetHeight, preference) {
-    const desiredWidth = clamp(roundToStep(targetWidth), CONSTRAINTS.step, CONSTRAINTS.maxEdge);
-    const desiredHeight = clamp(roundToStep(targetHeight), CONSTRAINTS.step, CONSTRAINTS.maxEdge);
+    const constraints = getConstraints();
+    const desiredWidth = clamp(roundToStep(targetWidth), constraints.minEdge, constraints.maxEdge);
+    const desiredHeight = clamp(roundToStep(targetHeight), constraints.minEdge, constraints.maxEdge);
     let best = null;
 
-    WIDTH_VALUES.forEach(function (candidateWidth) {
+    getWidthValues(constraints).forEach(function (candidateWidth) {
       const range = getValidHeightRangeForWidth(candidateWidth);
       if (!range) {
         return;
@@ -962,19 +1140,23 @@
       }
     });
 
-    return best || { width: 1024, height: 1024 };
+    return best || {
+      width: clamp(roundToStep(1024), constraints.minEdge, constraints.maxEdge),
+      height: clamp(roundToStep(1024), constraints.minEdge, constraints.maxEdge),
+    };
   }
 
   function getValidHeightRangeForWidth(width) {
+    const constraints = getConstraints();
     const minHeight = Math.max(
-      CONSTRAINTS.step,
-      ceilToStep(width / CONSTRAINTS.maxAspect),
-      ceilToStep(CONSTRAINTS.minPixels / width)
+      constraints.minEdge,
+      ceilToStep(width / constraints.maxAspect),
+      ceilToStep(constraints.minPixels / width)
     );
     const maxHeight = Math.min(
-      CONSTRAINTS.maxEdge,
-      floorToStep(width * CONSTRAINTS.maxAspect),
-      floorToStep(CONSTRAINTS.maxPixels / width)
+      constraints.maxEdge,
+      floorToStep(width * constraints.maxAspect),
+      floorToStep(constraints.maxPixels / width)
     );
 
     if (minHeight > maxHeight) {
@@ -1006,15 +1188,18 @@
   }
 
   function roundToStep(value) {
-    return Math.max(CONSTRAINTS.step, Math.round(value / CONSTRAINTS.step) * CONSTRAINTS.step);
+    const constraints = getConstraints();
+    return Math.max(constraints.minEdge, Math.round(value / constraints.step) * constraints.step);
   }
 
   function ceilToStep(value) {
-    return Math.ceil(value / CONSTRAINTS.step) * CONSTRAINTS.step;
+    const constraints = getConstraints();
+    return Math.ceil(value / constraints.step) * constraints.step;
   }
 
   function floorToStep(value) {
-    return Math.floor(value / CONSTRAINTS.step) * CONSTRAINTS.step;
+    const constraints = getConstraints();
+    return Math.floor(value / constraints.step) * constraints.step;
   }
 
   function clamp(value, min, max) {

@@ -193,6 +193,11 @@ input {
   outline-offset: 2px;
 }
 
+.model-select option {
+  background: #000;
+  color: #fff;
+}
+
 .section-heading {
   display: flex;
   align-items: flex-end;
@@ -322,6 +327,11 @@ input {
   background: linear-gradient(180deg, rgba(0, 229, 255, 0.12), rgba(0, 229, 255, 0.03));
   border-color: rgba(0, 229, 255, 0.45);
   box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.25) inset;
+}
+
+.preset-button.hidden,
+.preset-group.hidden {
+  display: none;
 }
 
 .preset-label {
