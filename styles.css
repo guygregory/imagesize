@@ -976,7 +976,11 @@ body.sidebar-collapsed .sidebar-collapse {
 @media (max-width: 480px) {
   .mobile-footnote {
     display: block;
-    margin: 12px 0 0;
+    position: fixed;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    margin: 0;
     text-align: center;
     font-size: 0.72rem;
     color: var(--muted);
