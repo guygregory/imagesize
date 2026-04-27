@@ -977,7 +977,7 @@ body.sidebar-collapsed .sidebar-collapse {
   .mobile-footnote {
     display: block;
     position: fixed;
-    bottom: 12px;
+    bottom: 20px;
     left: 0;
     right: 0;
     margin: 0;
@@ -985,6 +985,7 @@ body.sidebar-collapsed .sidebar-collapse {
     text-align: center;
     font-size: 0.72rem;
     color: var(--muted);
+    z-index: 100;
   }
 }
 
